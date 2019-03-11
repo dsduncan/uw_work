@@ -1,72 +1,34 @@
-# Partially-automated manual inspection of fluxes from FluxQC ----
-#
-# We created a largely manual/visual inspection process for trace gas fluxes.
-# This process employed an online tool designed to simplify the process of
-# visualizing concentration time-series. Individual concentration values could
-# be removed using the tool's GUI. The censored data could then be downloaded
-# and processed normally. The workflow was as follows
-# 1. Upload raw data to FluxQC
-# 2. Visually inspect data for obvious outliers (more detailed criteria 
-#    in the document "Protocol for Gas Flux Determination")
-# 3. Download inspected data and calculate fluxes
-# 4. Force data to be linear if:
-#    A. The HMR package's algorithm identifies the data as linear
-#    B. There are only 3 valid observations in the dataset
-#    C. The HMR package identifies the data as HMR, but the slope for HMR is
-#       within the 95% confidence interval for the linear fit
-# 5. Re-upload all data to FluxQC
-# 6. Conduct second round of visual inspection, cognizant of how the fluxes
-#    were estimated the first time.
-#    In essence, this is a second opportunity to rule against the use of HMR by
-#    eliminating a data point with too much aparent leverage.
-#
-# There are two quirks in this process:
-# 1. There was a batch download process that pulled down *all* data that David
-#    Duncan had initially uploaded. This would include raw data and second-
-#    round data. Raw data uploaded by KBS, on the other hand, needed to be 
-#    downloaded one sampling date at a time (data are typically uploaded by
-#    sampling dates).
-# 2. This process had been carried out for the earlier part of the dataset
-#    (2009-2012) for a previous manuscript, and as such did not need to be run
-#    a second time.
-#
-# This entire process is not easily recreated/re-run, so I'm pulling aside the
-# code for this for documentation purposes, rather than to attempt to re-run
-# the data.
-#
-# David Duncan
-# 2017-09-17
-
 # Libraries ----
 
 source("00_useful_functions.R")
 require(data.table)
 require(lubridate)
 
-# 3.1 Read in AARS data ----
-# The raw AARs data will be part of a single batch file, which would also
-# include the second round of visual inspections. The "study" field can be
-# used to identify raw data (raw will be "aars bcse").
-# As mentioned above, data from 2009-2012 would have already been evaluated
-# and would not need to be re-inspected. One exception: microplots prior to
-# 2012 *were not* part of the original inspection.
+
+# Read in AARS data ----
+# Data are in a single file, also including second round of visual inspections.
+# For raw data, `study` == 'aars bcse'. Data from 2009-12 were already 
+# evaluated and don't need to be run again (except for microplots in 2012).
 
 # Read data
 t_aars <- fread("data/fluxQC_downloads/old_fluxQC_dump.csv")
 
-# Modify data
+# Standardize
 t_aars[, ':=' (
   sampled_on = as.Date(sampled_on, "%Y-%m-%d"),
   site = "AARS",
   replicate = sub("R", "A", replicate)
-)]
+  )]
 
-# Filtering: Exclude earlier data
-t_aars <- t_aars[study == "aars bcse" & 
-                   (sampled_on > '2012-12-31' | grepl("M", treatment))]
+# Filter to exclude earlier data
+t_aars <- t_aars[
+  study == "aars bcse" & 
+    (sampled_on > '2012-12-31' | grepl("M", treatment)
+     )]
 
 
-# 3.2 Read in KBS data ----
+
+# Read in KBS data ----
 # KBS data had to be read in as individual files. These files have to be
 # joined into one data table.
 t_kbs <- batchRead("data/staging_KBS_data/")

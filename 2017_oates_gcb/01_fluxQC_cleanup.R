@@ -13,76 +13,86 @@ require(lubridate)
 # Read data
 t_aars <- fread("data/fluxQC_downloads/old_fluxQC_dump.csv")
 
-# Standardize
-t_aars[, ':=' (
-  sampled_on = as.Date(sampled_on, "%Y-%m-%d"),
-  site = "AARS",
-  replicate = sub("R", "A", replicate)
-  )]
-
 # Filter to exclude earlier data
 t_aars <- t_aars[
   study == "aars bcse" & 
     (sampled_on > '2012-12-31' | grepl("M", treatment)
-     )]
+    )]
 
-
+# Standardize data
+t_aars[, ':=' (
+  sampled_on = as.Date(sampled_on, "%Y-%m-%d"),
+  site = "AARS",
+  replicate = sub("R", "A", replicate),
+  id = NULL,
+  study = NULL
+  )]
 
 # Read in KBS data ----
 # KBS data had to be read in as individual files. These files have to be
 # joined into one data table.
 t_kbs <- batchRead("data/staging_KBS_data/")
-# Modify data
+
+# Standardize data
 t_kbs[, ':=' (
   sampled_on = as.Date(sampled_on, format="%Y-%m-%d"),
   site = "KBS",
-  replicate = sub("R", "K", replicate)
+  replicate = sub("R", "K", replicate),
+  treatment = sub("[LM][1-4]|no_cover", "M", treatment),
+  study = NULL
 )]
-# Standardize column names
+
+# Rename column that identifes the trace gas
 setnames(t_kbs, "compound", "name")
 
+# Microplots not associated with a treatment
+t_kbs <- t_kbs[(treatment != "M") & (!is.na(ppm))]
 
+# Only keep main plots after 2011 or any mircoplots
+t_kbs <- t_kbs[sampled_on > '2011-12-31' | grepl("M", treatment)] 
 
+# Combine datasets ----
 
-# Standardize KBS microbplot treatment names
-t_kbs <- subset(t_kbs, !(treatment %in% c("L1","L2","L3","M1","M2","M3","M4")))  
-t_kbs$treatment <- gsub("M1","M", t_kbs$treatment)
-t_kbs$treatment <- gsub("no_cover","M", t_kbs$treatment)
-
-# No need to re-analyze data from Oates et al. 2015, so only keep data from
-# 2012+, or from microplots before then.
-t_kbs_mirco <- grepl("M", t_kbs$treatment)
-t_kbs <- subset(t_kbs, (sampled_on > "2011-12-31" | t_kbs_mirco))
-
-# 3.3 Combine AARS and KBS datasets ----
 # Align columns and merge data frames
-t_cols <- c("site", "sampled_on", "treatment", "replicate",  
-                    "lid", "avg_height_cm", "minutes", "ppm", "name")
-t_aars <- t_aars[,t_cols]
-t_kbs <- t_kbs[,t_cols]
-conc.temp <- rbind(t_aars, t_kbs)
+t_cols <- c(
+  "site", "sampled_on", "treatment", "replicate", "lid", "avg_height_cm", 
+  "minutes", "ppm", "name")
+setcolorder(t_aars, t_cols)
+setcolorder(t_kbs, t_cols)
+t_dat <- rbind(t_aars, t_kbs)
 
-# Rename columns for simplicity and consistency, then sort
-names(conc.temp)[c(2:7)] <- c("date", "trt", "block", "bucket", "height.cm", "d.min")
-conc.temp <- conc.temp[with(conc.temp, order(site, date, trt, block, d.min, name)),]
+# Rename columns (names dictated by convention)
+t_oldnames <- c(
+  "sampled_on", "treatment", "replicate", "lid", "avg_height_cm", "minutes")
+t_newnames <- c("date", "trt", "block", "bucket", "height_cm", "d_min")
+setnames(t_dat, t_oldnames, t_newnames)
+setorder(t_dat, site, date, trt, block, d_min, name, -ppm)
 
-## Unstack GHGs
-# Note: There will be errors due to duplicated measurements. These have been
-# reviewed and the duplicated measurements come from samples lacking data in
-# the d.min field. 
-conc <- reshape(conc.temp, v.names = "ppm", timevar = "name",
-                idvar = c("date", "trt", "block", "d.min", "height.cm"), direction = "wide")
+# Drop duplicated columns (both of them!)
+t_dup <- duplicated(t_dat, by=c('site','date','trt','block','d_min','name'))
+t_dat <- t_dat[!t_dup]
 
-## Remove unusable data
-# No or very low N2O concentration values
-conc <- conc[(!is.na(conc$ppm.n2o)) & conc$ppm.n2o > 0.2,]
-# Remove data without bucket height
-conc <- conc[conc$height.cm > 0,]
+# Reshape data to put GHGs in same row
+conc <- reshape(
+  t_dat, v.names="ppm", timevar="name",
+  idvar = c("date", "trt", "block", "d_min", "height_cm"), direction = "wide")
+
+setDT(conc)
+
+# Remove unusable data
+conc <- conc[(!is.na(ppm.n2o)) & ppm.n2o > 0.2 & height_cm > 0]
 
 # Create a unique series name to store metadata during the HMR process
-# Also gives a unique identifier for counting observations per sample
-conc$series <- factor(with(conc, paste(date, site, block, trt ,sep = "_")))
-# Use only series with 3+ data points. It makes sense to attach this
+conc[, series := factor(paste(date, site, block, trt, sep="_"))]
+# 
+
+conc[, .(nobs = length(date)), by=series]
+conc <- conc[nobs >= 3]
+conc[, nobs := NULL]
+setorder(conc, site, date, trt, block, d_min)
+
+
+
 # information to conc so I can use it later on for identifying samples that
 # cannot be nonlinear.
 counts.temp <- table(conc$series)

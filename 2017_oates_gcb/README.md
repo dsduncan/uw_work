@@ -1,6 +1,13 @@
 # Environmental factors function as constraints on soil nitrous oxide fluxes in bioenergy feedstock cropping systems #
 
-David S. Duncan, Lawrence G. Oates, Ilya Gelfand, Neville Millar, G. Philip Robertson, Randall D. Jackson
-_GCB Bioenergy, 2018_
-`https://doi.org/10.1111/gcbb.12572`
+David S. Duncan, Lawrence G. Oates, Ilya Gelfand, Neville Millar, G. Philip Robertson, Randall D. Jackson  
+_GCB Bioenergy, 2018_  [https://doi.org/10.1111/gcbb.12572](https://doi.org/10.1111/gcbb.12572)
 
+## Overview ##
+
+
+
+## Scripts ##
+
+* `00_useful_functions.R` Contains useful functions for handling data processing.
+* `01_fluxQC_cleanup.R` Process for cleaning up fluxes (includes some manual steps that can't be well-documented,but I'm trying to make this as transparent as possible).

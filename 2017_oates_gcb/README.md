@@ -6,6 +6,15 @@ _GCB Bioenergy, 2018_
 [https://doi.org/10.1111/gcbb.12572](https://doi.org/10.1111/gcbb.12572)
 
 ## Overview ##
+
+## Scripts ##
+
+### `00_useful_functions.R` ###
+
+Contains useful functions for handling data processing.
+
+### `01_fluxQC_cleanup.R` ###
+ 
 We created a largely manual/visual inspection process for trace gas fluxes. This
  process employed an online tool designed to simplify the process of visualizing
  concentration time-series. Individual concentration values could be removed 
@@ -40,12 +49,3 @@ a second time.
 This entire process is not easily recreated/re-run, so I'm pulling aside the
 code for this for documentation purposes, rather than to attempt to re-run
 the data.
-
-## Scripts ##
-
-### `00_useful_functions.R` ###
-Contains useful functions for handling data processing.
-
-###`01_fluxQC_cleanup.R` ### 
-Process for cleaning up fluxes (includes some manual steps that can't be well-
-documented,but I'm trying to make this as transparent as possible).

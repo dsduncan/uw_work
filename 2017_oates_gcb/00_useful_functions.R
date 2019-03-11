@@ -7,7 +7,6 @@
 # 2017-09-17
 ###---###---###---###
 
-
 FluxAgg <- function(dataset, date.table, site = "site", plot = "plot", year = "year", trt = "trt", 
                     block = "block", flux = "n2o.ha.day", date = "date", date.format = "%Y-%m-%d"){
   # FluxAgg 

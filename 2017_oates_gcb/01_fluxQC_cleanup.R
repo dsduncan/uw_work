@@ -5,6 +5,7 @@ require(data.table)
 require(lubridate)
 
 
+
 # Read in AARS data ----
 # Data are in a single file, also including second round of visual inspections.
 # For raw data, `study` == 'aars bcse'. Data from 2009-12 were already 
@@ -28,6 +29,7 @@ t_aars[, ':=' (
   study = NULL
   )]
 
+
 # Read in KBS data ----
 # KBS data had to be read in as individual files. These files have to be
 # joined into one data table.
@@ -50,6 +52,7 @@ t_kbs <- t_kbs[(treatment != "M") & (!is.na(ppm))]
 
 # Only keep main plots after 2011 or any mircoplots
 t_kbs <- t_kbs[sampled_on > '2011-12-31' | grepl("M", treatment)] 
+
 
 # Combine datasets ----
 
@@ -76,34 +79,23 @@ t_dat <- t_dat[!t_dup]
 conc <- reshape(
   t_dat, v.names="ppm", timevar="name",
   idvar = c("date", "trt", "block", "d_min", "height_cm"), direction = "wide")
-
+# Convert conc from dataframe to data.table
 setDT(conc)
 
 # Remove unusable data
 conc <- conc[(!is.na(ppm.n2o)) & ppm.n2o > 0.2 & height_cm > 0]
 
 # Create a unique series name to store metadata during the HMR process
+# (Also weed out measurements with < 3 data points)
 conc[, series := factor(paste(date, site, block, trt, sep="_"))]
-# 
-
-conc[, .(nobs = length(date)), by=series]
-conc <- conc[nobs >= 3]
-conc[, nobs := NULL]
+t_cnts = conc[, list(nobs = .N), by = series]
+conc <- conc[series %in% t_cnts[nobs >= 3, series]]
+# Sort
 setorder(conc, site, date, trt, block, d_min)
 
+# Cleanup
+rm(list=ls(pattern="t_"))
 
-
-# information to conc so I can use it later on for identifying samples that
-# cannot be nonlinear.
-counts.temp <- table(conc$series)
-conc$count <- counts.temp[match(conc$series, names(counts.temp))]
-conc <- subset(conc, count >= 3)
-
-# It's always good to sort
-conc <- conc[with(conc, order(site, date, trt, block, d.min)),]
-
-## Cleanup
-rm(list=ls(pattern="temp"))
 
 # 3.4 Set bucket dimensions----
 # Different buckets were used at different times in each site, so we need to

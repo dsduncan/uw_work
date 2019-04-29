@@ -1,12 +1,10 @@
-# Libraries ----
+#### Libraries ####
 
 source("00_useful_functions.R")
 require(data.table)
 require(lubridate)
 
-
-
-# Read in AARS data ----
+#### Read in AARS data ####
 # Data are in a single file, also including second round of visual inspections.
 # For raw data, `study` == 'aars bcse'. Data from 2009-12 were already 
 # evaluated and don't need to be run again (except for microplots in 2012).
@@ -30,7 +28,7 @@ t_aars[, ':=' (
   )]
 
 
-# Read in KBS data ----
+#### Read in KBS data ####
 # KBS data had to be read in as individual files. These files have to be
 # joined into one data table.
 t_kbs <- batchRead("data/staging_KBS_data/")
@@ -53,8 +51,7 @@ t_kbs <- t_kbs[(treatment != "M") & (!is.na(ppm))]
 # Only keep main plots after 2011 or any mircoplots
 t_kbs <- t_kbs[sampled_on > '2011-12-31' | grepl("M", treatment)] 
 
-
-# Combine datasets ----
+#### Combine datasets ####
 
 # Align columns and merge data frames
 t_cols <- c(
@@ -96,61 +93,42 @@ setorder(conc, site, date, trt, block, d_min)
 # Cleanup
 rm(list=ls(pattern="t_"))
 
+#### Calculate bucket dimensions ####
+# Different buckets were used at different times in each site and inserted to
+# different depths, so we need to calculate a separate volume for each 
+# observation.
 
-# 3.4 Set bucket dimensions----
-# Different buckets were used at different times in each site, so we need to
-# calculate a separate volume for each observation.
+## Plastic (type Z) buckets ##
+# Conical, larger near the top, so area at surface depends on insertion height.
+# Constants based on measurement of 3 representative buckets.
+t_lid_z    <- 0.0125           # Distance from lid bottom to bucket lip, m
+t_bot_z    <- 0.12765          # Bottom radius, m
+t_height_z <- 0.2545           # Total height of plastic bucket, m
+t_delta_z  <- 0.01385          # Increase in radius at base of lid, m
+t_top_z <- t_bot_z + t_delta_z # Radius at base of lid, m
 
-conc$height.m <- 0
-conc$surfRad.m <- 0
-conc$vol.m3 <- 0
+conc[bucket == "Z", height_m := (height_cm/100) - t_lid_z]
+conc[bucket == "Z", surfRad_m := 
+       (t_bot_z + t_delta_z * (t_height_z - height_m) / t_height_z)]
+# V = 1/3 * pi * (r^2 + R^2 + r*R) * h
+conc[bucket == "Z", vol_m3 := 
+       pi/3 * (surfRad_m^2 + t_top_z^2 + surfRad_m*t_top_z) * height_m]
 
-### Plastic (type Z) buckets
-# Slightly but noticeably conical, growing larger near the top of the bucket.
-# Cross sectional area at surface will thus be a function of insertion height.
-# All constants were obtained by measuring a set of 3 "representative" buckets
-# we had lying around.
-kZLid <- 1.25 # Distance from lid bottom to bucekt lip, cm
-kZBot <- 12.765 # Bottom radius, cm
-kZHeight <- 25.45 # Total height of plastic bucket, cm
-kZDelta <- 1.385 # Increase in radius at base of lid, cm
-kZTop <- (kZBot+kZDelta)/100 # Radius at base of lid in m
+## Metal (Type Y) buckets ##
+# Assumed to be perfect cylinders. Constants derived from manufacturing
+# specifications.
+t_lid_y <- 0.003   # Distance from lid bottom to bucket lip, m
+t_rad_y <- 0.14225 # Bucket radius, m
 
-temp.Z.height <- conc[conc$bucket == "Z", "height.cm"] - kZLid
-conc[conc$bucket == "Z", "height.m"] <- temp.Z.height/100
+conc[bucket == "Y", height_m := (height_cm/100) - t_lid_y]
+conc[bucket == "Y", surfRad_m := t_rad_y / 100]
+conc[bucket == "Y", vol_m3 := pi * surfRad_m^2 * height_m]
 
-conc[conc$bucket == "Z", "surfRad.m"] <- 
-  (kZBot + (kZHeight - temp.Z.height)/kZHeight*kZDelta)/100
+## Area at soil surface ##
+conc[, surfA_m2 := pi * surfRad_m ^2]
 
-# Because plastic buckets are truncated cones, we calculate their volume as:
-# V = 1/3 pi (r^2+R^2+r*R) h
-# where r and R are radii at the surface and lid bottom
-temp.Z.rad <- conc[conc$bucket == "Z", "surfRad.m"]
-{conc[conc$bucket == "Z", "vol.m3"] <-
-    pi/3 * (temp.Z.rad^2 + kZTop^2 + kZTop*temp.Z.rad)* #R^2+r^2+r*R
-    conc[conc$bucket == "Z", "height.m"]} # h
-
-### Metal (Type Y) buckets
-# Assumed to be perfect cylinders.
-# All constants derived from the manufacturing specifications
-kYLid <- 0.3 # Distance from lid bottom to bucket lip, cm
-kYRad <- 14.225 # Radius in cm
-
-temp.Y.height <- conc[conc$bucket == "Y", "height.cm"]-kYLid
-conc[conc$bucket == "Y", "height.m"] <- temp.Y.height/100
-
-conc[conc$bucket == "Y", "surfRad.m"] <- kYRad/100
-
-conc[conc$bucket == "Y", "vol.m3"] <- 
-  pi*conc[conc$bucket == "Y", "surfRad.m"]^2* # radius
-  conc[conc$bucket == "Y", "height.m"]        # height
-
-### Area at soil surface (both bucket types)
-conc$surfA.m2 <- pi*conc$surfRad.m^2
-
-### Remove temporary objects
-rm(list=ls(pattern="k"))
-rm(list=ls(pattern = "temp"))
+## Remove temporary objects ##
+rm(list=ls(pattern = "t_"))
 
 #### Backup conc data ###
 # write.table(conc, "../data/R intermediate/conc_backup.txt", sep = "\t", row.names=FALSE, quote=FALSE)
